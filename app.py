@@ -4,6 +4,7 @@ from marshmallow import Schema,fields
 
 from flask_script import Manager
 from flask_migrate import Migrate, MigrateCommand
+from flask_principal import Principal, Permission, RoleNeed
 
 
 app=Flask(__name__)
@@ -14,6 +15,25 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"]=False
 db=SQLAlchemy(app)
 
 migrate = Migrate(app, db)
+
+# load the extension
+principals = Principal(app)
+
+# Create a permission with a single Need, in this case a RoleNeed.
+admin_permission = Permission(RoleNeed('admin'))
+
+
+
+
+
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    identity_changed.send(current_app._get_current_object(),
+                            identity=Identity(user.id))
+
+    return redirect(request.args.get('next') or '/')
+
 
 
 class users(db.Model):
@@ -45,7 +65,7 @@ class users(db.Model):
         db.session.delete(self)
         db.session.commit()
 
-class RecipeSchema(Schema):
+class userschema(Schema):
     id=fields.Integer()
     name=fields.String()
     last_name=fields.String()
@@ -56,13 +76,14 @@ class RecipeSchema(Schema):
 
 
 
+@admin_permission.require()
 @app.route('/users',methods=['GET'])
-def get_all_recipes():
-    recipes=Recipe.get_all()
+def get_all_users():
+    users=user.get_all()
 
-    serializer=RecipeSchema(many=True)
+    serializer=userschema(many=True)
 
-    data=serializer.dump(recipes)
+    data=serializer.dump(users)
 
     return jsonify(
         data
@@ -70,57 +91,62 @@ def get_all_recipes():
 
 
 @app.route('/users',methods=['POST'])
-def create_a_recipe():
+def create_a_user():
     data=request.get_json()
 
-    new_recipe=users(
+    new_user=users(
         name=data.get('name')
     )
 
-    new_recipe.save()
+    new_user.save()
 
-    serializer=RecipeSchema()
+    serializer=userschema()
 
-    data=serializer.dump(new_recipe)
+    data=serializer.dump(new_user)
 
     return jsonify(
         data
     ),201
 
-@app.route('/recipe/<int:id>',methods=['GET'])
-def get_recipe(id):
-    recipe=Recipe.get_by_id(id)
 
-    serializer=RecipeSchema()
+@app.route('/user/<int:id>',methods=['GET'])
+def get_user(id):
+    user=user.get_by_id(id)
 
-    data=serializer.dump(recipe)
+    serializer=userschema()
+
+    data=serializer.dump(user)
 
     return jsonify(
         data
     ),200
 
-@app.route('/recipe/<int:id>',methods=['PUT'])
-def update_recipe(id):
-    recipe_to_update=Recipe.get_by_id(id)
+
+@admin_permission.require()
+@app.route('/user/<int:id>',methods=['PUT'])
+def update_user(id):
+    user_to_update=user.get_by_id(id)
 
     data=request.get_json()
 
-    recipe_to_update.name=data.get('name')
-    recipe_to_update.description=data.get('description')
+    user_to_update.name=data.get('name')
+    user_to_update.description=data.get('description')
 
     db.session.commit()
 
-    serializer=RecipeSchema()
+    serializer=userschema()
 
-    recipe_data=serializer.dump(recipe_to_update)
+    user_data=serializer.dump(user_to_update)
 
-    return jsonify(recipe_data),200
+    return jsonify(user_data),200
 
-@app.route('/recipe/<int:id>',methods=['DELETE'])
-def delete_recipe(id):
-    recipe_to_delete=Recipe.get_by_id(id)
 
-    recipe_to_delete.delete()
+@admin_permission.require()
+@app.route('/user/<int:id>',methods=['DELETE'])
+def delete_user(id):
+    user_to_delete=user.get_by_id(id)
+
+    user_to_delete.delete()
 
     return jsonify({"message":"Deleted"}),204
 
