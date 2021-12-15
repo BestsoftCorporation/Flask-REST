@@ -2,20 +2,28 @@ from flask import Flask, json,jsonify,request
 from flask_sqlalchemy import SQLAlchemy
 from marshmallow import Schema,fields
 
+from flask_script import Manager
+from flask_migrate import Migrate, MigrateCommand
+
+
 app=Flask(__name__)
-app.config["SQLALCHEMY_DATABASE_URI"]='postgresql://postgres:testuser@localhost/data_db'
+app.config["SQLALCHEMY_DATABASE_URI"]='postgresql://postgres:marko@localhost/data_db'
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"]=False
 
 
 db=SQLAlchemy(app)
 
-# id
-#name
-#description
+migrate = Migrate(app, db)
+
 
 class users(db.Model):
     id=db.Column(db.Integer(),primary_key=True)
     name=db.Column(db.String(255),nullable=False)
+    last_name=db.Column(db.String(255),nullable=False)
+    email=db.Column(db.String(255),nullable=False)
+    username=db.Column(db.String(255),nullable=False)
+    password=db.Column(db.String(255),nullable=False)
+    acc_type=db.Column(db.Integer,nullable=False)
     
 
     def __repr__(self):
@@ -40,10 +48,15 @@ class users(db.Model):
 class RecipeSchema(Schema):
     id=fields.Integer()
     name=fields.String()
+    last_name=fields.String()
+    email=fields.String()
+    username=fields.String()
+    password=fields.String()
+    acc_type=fields.Integer()
 
 
 
-@app.route('/recipes',methods=['GET'])
+@app.route('/users',methods=['GET'])
 def get_all_recipes():
     recipes=Recipe.get_all()
 
@@ -56,7 +69,7 @@ def get_all_recipes():
     )
 
 
-@app.route('/recipes',methods=['POST'])
+@app.route('/users',methods=['POST'])
 def create_a_recipe():
     data=request.get_json()
 
