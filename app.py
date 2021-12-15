@@ -24,9 +24,6 @@ admin_permission = Permission(RoleNeed('admin'))
 
 
 
-
-
-
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     identity_changed.send(current_app._get_current_object(),
