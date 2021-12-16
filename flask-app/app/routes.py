@@ -1,9 +1,7 @@
-# routes.py
-
-from flask import render_template
+from flask import render_template,jsonify,request
 from app import app 
-from app.models import Users
-from flask_principal import Principal, Permission, RoleNeed
+from app.models import Users, arrangement
+from flask_principal import Identity,identity_changed,identity_loaded,Principal, Permission, RoleNeed
 from marshmallow import Schema,fields
 
 
@@ -14,14 +12,6 @@ admin_permission = Permission(RoleNeed('admin'))
 tourist_permission = Permission(RoleNeed('tourist'))
 tavel_guide_permission = Permission(RoleNeed('travelguide'))
 
-class userschema(Schema):
-    id=fields.Integer()
-    name=fields.String()
-    last_name=fields.String()
-    email=fields.String()
-    username=fields.String()
-    password=fields.String()
-    acc_type=fields.Integer()
 
 class userschema(Schema):
     id=fields.Integer()
@@ -31,25 +21,44 @@ class userschema(Schema):
     username=fields.String()
     password=fields.String()
     acc_type=fields.Integer()
+
+class arrangementschema(Schema):
+    id_arrangement=fields.Integer()
+    start_date=fields.Date()
+    end_date=fields.Date()
+    description=fields.String()
+    destination=fields.String()
+    capacity=fields.Integer()
+    price=fields.Integer()
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    identity_changed.send(current_app._get_current_object(),
-                            identity=Identity(user.id))
+    data=request.get_json()
 
-    return redirect(request.args.get('next') or '/')
+    user = Users.query.filter(Users.username==data.get('username')).first()
+    if user:
+            if user.password != form.password.data:
+             return jsonify(
+                {"message":"wrong credentials"}
+             ) 
 
-@admin_permission.require()
+            identity_changed.send(current_app._get_current_object(), identity=Identity(user.id))
+            identity.provides.add(RoleNeed('admin'))
+    return jsonify(
+                {"message":"wrong credentials"}
+             )
+
 @app.route('/users',methods=['GET'])
+@admin_permission.require()
 def get_all_users():
-    users=user.get_all()
+    users=Users.get_all()
 
     serializer=userschema(many=True)
 
     data=serializer.dump(users)
 
     return jsonify(
-        data
+        {"asd":"sasdsa"}
     )
 
 
@@ -66,6 +75,28 @@ def create_a_user():
     serializer=userschema()
 
     data=serializer.dump(new_user)
+
+    return jsonify(
+        data
+    ),201
+
+@app.route('/arrangement',methods=['POST'])
+def create_arrangement():
+    data=request.get_json()
+
+    new_arrangement=arrangement(
+        start_time=data.get('start_time'),
+        end_time=data.get('end_time'),
+        price=data.get('price'),
+        capacity=data.get('capacity'),
+        description=data.get('description')
+    )
+
+    new_arrangement.save()
+
+    serializer=arrangementschema()
+
+    data=serializer.dump(new_arrangement)
 
     return jsonify(
         data
