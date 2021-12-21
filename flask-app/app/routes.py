@@ -1,8 +1,13 @@
-from flask import render_template,jsonify,request
+from flask import render_template,jsonify,request,make_response
 from app import app 
 from app.models import Users, arrangement
 from flask_principal import Identity,identity_changed,identity_loaded,Principal, Permission, RoleNeed
 from marshmallow import Schema,fields
+import jwt
+from werkzeug.security import safe_str_cmp,generate_password_hash, check_password_hash
+from functools import wraps
+from datetime import datetime, timedelta
+
 
 
 # load the extension
@@ -24,30 +29,88 @@ class userschema(Schema):
 
 class arrangementschema(Schema):
     id_arrangement=fields.Integer()
-    start_date=fields.Date()
-    end_date=fields.Date()
+    start_date= fields.DateTime(format='%Y-%m-%dT%H:%M:%S%z')
+    end_date= fields.DateTime(format='%Y-%m-%dT%H:%M:%S%z')
     description=fields.String()
     destination=fields.String()
     capacity=fields.Integer()
     price=fields.Integer()
 
-@app.route('/login', methods=['GET', 'POST'])
+
+username_table = {u.username: u for u in Users.query.all()}
+userid_table = {u.id: u for u in Users.query.all()}
+
+
+
+def token_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        token = None
+        # jwt is passed in the request header
+        if 'x-access-token' in request.headers:
+            token = request.headers['x-access-token']
+        # return 401 if token is not passed
+        if not token:
+            return jsonify({'message' : 'Token is missing !!'}), 401
+  
+        try:
+            # decoding the payload to fetch the stored details
+            data = jwt.decode(token, app.config['SECRET_KEY'])
+            current_user = User.query\
+                .filter_by(public_id = data['public_id'])\
+                .first()
+        except:
+            return jsonify({
+                'message' : 'Token is invalid !!'
+            }), 401
+        # returns the current logged in users contex to the routes
+        return  f(current_user, *args, **kwargs)
+  
+    return decorated
+
+@app.route('/login', methods =['POST'])
 def login():
-    data=request.get_json()
+    # creates dictionary of form data
+    auth = request.get_json()
 
-    user = Users.query.filter(Users.username==data.get('username')).first()
-    if user:
-            if user.password != form.password.data:
-             return jsonify(
-                {"message":"wrong credentials"}
-             ) 
+  
+    if not auth or not auth.get('username') or not auth.get('password'):
+        # returns 401 if any email or / and password is missing
+        return make_response(
+            'Could not verify',
+            401,
+            {'WWW-Authenticate' : 'Basic realm ="Login required !!"'}
+        )
+  
+    user = Users.query\
+        .filter_by(username = auth.get('username'))\
+        .first()
+  
+    if not user:
+        # returns 401 if user does not exist
+        return make_response(
+            'Could not verify',
+            401,
+            {'WWW-Authenticate' : 'Basic realm ="User does not exist !!"'}
+        )
+  
+    if check_password_hash(user.password, auth.get('password')):
+        # generates the JWT Token
+        token = jwt.encode({
+            'id': str(user.id),
+            'exp' : datetime.utcnow() + timedelta(minutes = 30)
+        }, 'super-secret')
+  
+        return make_response(jsonify({'token' : token}), 201)
+    # returns 403 if password is wrong
+    return make_response(
+        'Could not verify',
+        403,
+        {'WWW-Authenticate' : 'Basic realm ="Wrong Password !!"'}
+    )
+  
 
-            identity_changed.send(current_app._get_current_object(), identity=Identity(user.id))
-            identity.provides.add(RoleNeed('admin'))
-    return jsonify(
-                {"message":"wrong credentials"}
-             )
-
+@token_required
 @app.route('/users',methods=['GET'])
 @admin_permission.require()
 def get_all_users():
@@ -58,16 +121,21 @@ def get_all_users():
     data=serializer.dump(users)
 
     return jsonify(
-        {"asd":"sasdsa"}
+        data
     )
 
 
-@app.route('/users',methods=['POST'])
+@app.route('/signup',methods=['POST'])
 def create_a_user():
     data=request.get_json()
 
-    new_user=users(
-        name=data.get('name')
+    new_user=Users(
+        name=data.get('name'),
+        last_name=data.get('last_name'),
+        email=data.get('email'),
+        username=data.get('username'),
+        password=generate_password_hash(data.get('password')),
+        acc_type=2
     )
 
     new_user.save()
@@ -80,6 +148,7 @@ def create_a_user():
         data
     ),201
 
+@token_required
 @app.route('/arrangement',methods=['POST'])
 def create_arrangement():
     data=request.get_json()
@@ -102,7 +171,7 @@ def create_arrangement():
         data
     ),201
 
-
+@token_required
 @app.route('/user/<int:id>',methods=['GET'])
 def get_user(id):
     user=user.get_by_id(id)
@@ -115,7 +184,7 @@ def get_user(id):
         data
     ),200
 
-
+@token_required
 @admin_permission.require()
 @app.route('/user/<int:id>',methods=['PUT'])
 def update_user(id):
@@ -134,7 +203,7 @@ def update_user(id):
 
     return jsonify(user_data),200
 
-
+@token_required
 @admin_permission.require()
 @app.route('/user/<int:id>',methods=['DELETE'])
 def delete_user(id):

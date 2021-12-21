@@ -1,9 +1,9 @@
 from app import db
 
 class arrangement(db.Model):
-    id_arrangement=db.Column(db.Integer(),primary_key=True)
-    start_date=db.Column(db.Date(),nullable=False)
-    end_date=db.Column(db.Date(),nullable=False)
+    id_arrangement=db.Column(db.Integer,primary_key=True)
+    start_date=db.Column(db.DateTime(),nullable=False)
+    end_date=db.Column(db.DateTime(),nullable=False)
     description=db.Column(db.String(),nullable=False)
     destination=db.Column(db.String(),nullable=False)
     capacity=db.Column(db.Integer(),nullable=False)
